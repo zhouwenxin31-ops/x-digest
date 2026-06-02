@@ -1,0 +1,59 @@
+name: x-digest
+
+on:
+  schedule:
+    # 01:15 UTC = 09:15 北京时间。
+    # 注：GitHub cron 走 UTC，且高峰常延迟 5-15 分钟，提早排程以尽量卡在 09:30 前出报告。
+    - cron: "15 1 * * *"
+  workflow_dispatch: {}        # 支持手动触发（Actions 页面点 Run）
+
+permissions:
+  contents: write              # 提交归档 + 缓存
+  pages: write
+  id-token: write
+
+concurrency:
+  group: x-digest
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run digest
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python run.py
+
+      - name: Commit archive + id cache
+        run: |
+          git config user.name  "x-digest-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/ .cache/user_ids.json || true
+          git commit -m "digest $(date -u +%F)" || echo "nothing to commit"
+          git push || echo "push skipped"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
