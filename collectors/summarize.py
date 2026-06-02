@@ -23,100 +23,157 @@ MAX_TOKENS = 8000
 SYSTEM = """你是一位买方投研助理，为基金经理整理隔夜美股/港股/科技 KOL 推文。
 针对每条推文，输出严格的 JSON，字段:
   "i":         回填输入里的 i（整数），用于对齐
-  "summary":   一句话中文关键信息（提炼事实/蠹�{�#9.#z)�yi#z/�9c������"B��X��\�Ȏ�9��9c⹨!��9�l9��;�#9�/9o#�i��ȉ��H��c�9����-H�{�#9��9b&H�B��\�X�[ۈ��9. 9c�z+�y��yd$yb)9��{�"9�"�i&���"��n��.+y�)�
-�9�!��,{�"{�#9��9�#��k�)��yb&yhj����z+����9�#��k���yd$H�����\�H���YK٘[�H8�%8�%9����z+�8� Y[[ښx� y��9/�y�k�a���9hj��YB�c�/��a���ӈ9�l9��;�#:hn�n��.#�/��aiy. :!�;�#9.#z)�y.��/ezh�yi%����ke�� y.#z)�HX\���ۈ9f�9�#�� ������SQW��T�SHH���/h9�+�.l9��y��y�%9..��x� �g�.��f�9i'9��9����f:)�{�#9�'��$9.l9��y�%9�m���ydb�� ���/��a�.)y�/9���ӈ9k�z,h{�":gg��l9��;�"{�#9ke���{�&���[Y\Ȏ��MH9�hy�.9o��..�h�9�l9��;�#9�+��hyc!yd*��&���]H��9..�h�9�!�h�;�"
-N9ke��"B��\�ܚ\[ۈ��9��yn��b!���;�"�L�L9ke��"x� �c!y��9.��.�� �9�k�� yn �g.�olyd�z+�9/,8� y�.9o��`.�/�K��.�b-�� yd#���zh�fjK��.�`a��^W��[�Ȏ�:)�y�y�l9��;�#
-MH9.*��#9���.*�MKL�9ke��#9c����9��y�*9.����y�%9�9��B���[]Y�X��\�Ȏ�9��9al��!��9�l9��;�#9i��ȉ��H��c�9����-H�B���[�[Y[�����"�i&����"��n���.+y�)Ȃ���[ܚ]H��9/&9ab9��KM{�"H9� :j�;�"B����X��\�Ȏ�:j�:h�y�!��9�l9��;�#9�/9o#��ȝX��\������H����[���K��۝^���.⹥�z �9�k����/�����W{�#�۝^
-LN9ke�X\��]�[YH��9. 9c�z+�yn �g.�c�y.��쯺j���"LL9ke��"B���^W��][\�Ȏ�:/�y�'��MH9.*�al�e+�`�9c%�b`��#9i��ȓ�S�9/��n�9�)�o(9n����z!�����M��RH:g 9�`���:j�Ј9.�� �H�B���K�[Y\�9�"y.⹥�za�z)�y�)����n���"9��9al��)�
-�9n �g.�olyd�yb���"B���\�ܚ\[ۈ9��yn��b!���;�#9.#y�+�i#z/�;�&�c!yd*�n �g.�`.�/�zd﹧hB�ˈ�^W��[��9��y�%9���9����#9c����9��y�*9.���j9/&�����X��\��:(iyaaz �9�k��#9.#y.�z+�y�l�K�9c�/��a���ӻ�#9��X\���۸� y��:h�yi%����keȈ�����Y���[
-�\�[N���\�\���۝[����[�[���HO�����Y���TW��VN���Z\�H�[�[YQ\��܊��.�l$HS���P��TW��VH9��h��c�:a�ȊB��H�\]Y\�˜��
-S��S�XY\��^�X\KZ�^H��TW��VK��[���X�]�\��[ۈ������L
-�LH����۝[�]\H���\X�][ۋڜ�ۈ��K��ۏ^�[�[��[�[��X^���[�Ȏ�PV���S�����\�[H���\�[K��Y\��Y�\Ȏ��Ȝ��H���\�\����۝[���\�\���۝[�WK�K[Y[�]LL�
-B����Z\�Wٛܗ��]\�
-B���HH����ۊ
-B�Y���K��]
-���ܙX\�ۈ�HOH�X^���[�Ȏ���:/��a�(���*���x�%8�%9.�9��y."�l`�-l:a�z+�z`.�/�{�#9.#z)�ye����H��ۋ��Y�Z\�H�[YQ\��܊�d�yn�9f�X^���[��9�*���{�#��ӈ9.#yk�9�m�B������H��K��]
-��۝[���JB��]\�������[����]
-�^���H�܈�[������Y����]
-�\H�HOH�^�B���Y��\��Wڜ�ۊΈ��N������,�`iy��9c�i��.*���ӈ9�l9���k�z,h{�&�c��f�9�#�� ybiybcyd#�i.yn)����ke�� ������H˜��\
+  "summary":   一句话中文关键信息（提炼事实/观点，不要复述原文）
+  "tickers":   提及标的数组，格式如 ["$NVDA","台积电"]，无则 []
+  "direction": 一句话方向判断（看多/看空/中性 + 理由），无明确观点则填 "短评/无明确方向"
+  "noise":     true/false —— 纯短评、emoji、无信息量的填 true
+只输出 JSON 数组，顺序与输入一致，不要任何额外文字、不要 markdown 围栏。"""
 
-B��9c����ۈ���9�%����9f�9�#HH�K��X\��
-��
-Κ��ۊO�ʊ���Wʘ���K��B�Y�N���HK�ܛ�\
-JK���\
+THEME_SYSTEM = """你是买方投研主管。基于以下隔夜推文摘要，输出一个 JSON:
+  "themes":  3-6 条隔夜核心主题数组，每条一句话中文
+  "hot_tickers": 高频提及标的数组，按提及次数降序，格式 [{"ticker":"$NVDA","count":3}]
+只输出 JSON，不要 markdown 围栏、不要多余文字。"""
 
-B��9�*�c��+9. 9.*��9�%��9b,9� 9d#�. 9.*�H9�%�{�#9biy��bcyd#�i&�/fy���ke�[��H��܈[�
-˙�[�
-�ȊK˙�[�
-�ȊJHY�OHLWB�Y��[�΂��H��Z[��[��N�B�[�HX^
-˜��[�
-�H�K˜��[�
-�H�JB�Y�[�OHLN���H�Ι[�
-�WB��]\����ۋ��Y��B���Y��[�[^�Wؘ]�
-�]��\��X�K[�[���N�����cey�nyb!���;�&�i,z-)za�z+�y. 9�({�#9.�yi,z-)z/�9f��ۙH9.�:, ��*9��y�"y�nyf�` 8� �����^[�YH�ȚH��]ȗ�H�K�X���[���]ȘX���[��\�^H�K�^��]ȝ^�_B��܈][��]�B��]�؛�HH��ۋ�[\�^[�Y[��\�W�\��ZOQ�[�JB�\��\��H�ۙB��܈][\[��[��J�N���N���]�H��[
-�T�SK�]�؛�K[�[
-B�\��H�\��Wڜ�ۊ�]�B�Y���\�[��[��J\��\�
-N���Z\�H�[YQ\��܊���'��&��l9��;�#9o��b,�\J\��K��ۘ[YW��H�B��]\��\���^�\^�\[ۈ\�N��\��\��HB�[YK��Y\
-K�H
-�
-][\
-�JJB��[�
-����;�#�9�ny�(z)����9i,z-){�"�[��]�
-_H9�h{�"N��\��\��H�B��]\���ۙB���Y�[�[^�W����][\Έ\��X�K[�[���X^�\��[�
-HO�\��X�N���9�"z-)�c���*���{�#9���b-���[���W�X���X����[�HH�B��[[YYH�B��܈][�][\΂��H]ȘX���[��[�H�B��W�X����HH�W�X����]
-�
-H
-�B�Y��W�X����HHX^�\����[[YY�\[�
-]
-B��Y����[[YY���]\���B���9aj9l`9�(�o%{�#9/��.���"HH9k�zod9f�hj�܈Y][�[�[Y\�]J�[[YY
-N��]ȗ�H�HHY�]��]Y�][
-��[[X\�H���B�]��]Y�][
-�X��\�ȋ�JB�]��]Y�][
-�\�X�[ۈ���B�]��]Y�][
-���\�H��[�JB���W�[�^H�]ȗ�H�N�]�܈][��[[YYB��Z[���[�H���܈�[��[��J[��[[YY
-K�U���V�JN���]�H�[[YY�Μ�
-��U���V�WB�\��H�[�[^�Wؘ]�
-�]�[�[
-B�Y�\��\��ۙN���܈][��]���9.�z+�y�nyf�` ;�#9.#y���c�am�k���nB�]Ȝ�[[X\�H�HH�:)����9i,z-)JH���Z[���[�
-�H[��]�
-B��۝[�YB�Y�[
-\�[��[��JKX�
-H[��H�[�H�܈H[�\��N���܈H[�\����9�"HH9쯹�k�k�zod�]H�W�[�^��]
-K��]
-�H�JB�Y�]\��ۙN���۝[�YB�]Ȝ�[[X\�H�HHK��]
-��[[X\�H���H܈���]ȝX��\�ȗHHK��]
-�X��\�ȋ�JH܈�B�]ș\�X�[ۈ�HHK��]
-�\�X�[ۈ���H܈���]ț��\�H�HH���
-K��]
-���\�H��[�JJB�[�N���܈]H[��\
-�]�\��N��:` 9c%�..�hn�n��k�zod�Y���\�[��[��JKX�
-N���۝[�YB�]Ȝ�[[X\�H�HHK��]
-��[[X\�H���H܈���]ȝX��\�ȗHHK��]
-�X��\�ȋ�JH܈�B�]ș\�X�[ۈ�HHK��]
-�\�X�[ۈ���H܈���]ț��\�H�HH���
-K��]
-���\�H��[�JJB��Y��Z[���[����[�
-����;�#�9alH٘Z[���[�K��[��[[YY
-_H9�hyf�` 9..�
-:)����9i,z-)JH�B��܈][��[[YY��]��
-��H��ۙJB��]\���[[YY���Y�\�]�W�[Y\�][\Έ\��X�K[�[���HO�X���Y�\�H�ȘX���[���]ȘX���[��\�^H�K���[[X\�H��]��]
-��[[X\�H���K��X��\�Ȏ�]��]
-�X��\�ȋ�J_B��܈][�][\Y���]��]
-���\�H�H[�]��]
-��[[X\�H�H��[�
-���:)����9i,z-)JH�WB�Y���Y�\����]\��ȝ[Y\Ȏ��K���X��\�Ȏ��_B��N���]�H��[
-SQW��T�SK��ۋ�[\�Y�\�[��\�W�\��ZOQ�[�JK[�[
-B��]\���\��Wڜ�ۊ�]�B�^�\^�\[ۈ\�N���[�
-����;�#�9..�h���ӈ:)����9i,z-)N��_H�B��]\��ȝ[Y\Ȏ��K���X��\�Ȏ��_B���Y��ۘ[YW��OH���XZ[��Ȏ��[\ܝX[[�ٙ�HX[[��Y�W��Y
 
-������ۙ�Y˞X[[�K��XY�^
+def _call(system: str, user_content: str, model: str) -> str:
+    if not API_KEY:
+        raise RuntimeError("缺少 ANTHROPIC_API_KEY 环境变量")
+    r = requests.post(ENDPOINT, headers={
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }, json={
+        "model": model,
+        "max_tokens": MAX_TOKENS,
+        "system": system,
+        "messages": [{"role": "user", "content": user_content}],
+    }, timeout=120)
+    r.raise_for_status()
+    body = r.json()
+    if body.get("stop_reason") == "max_tokens":
+        # 输出被截断——交给上层走重试逻辑，不要喂给 json.loads
+        raise ValueError("响应因 max_tokens 截断，JSON 不完整")
+    blocks = body.get("content", [])
+    return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
 
-JB�][\�H��ۋ��Y�
-�������X�H����]���Y]˚��ۈ�K��XY�^
 
-JB�[�[Hٙ�Ȝ�[[X\�^�H�Vț[�[�B�][\�H[�[^�W����][\�[�[ٙ�Ȝ�[[X\�^�H�VțX^�����\��X���[��JB�[Y\�H\�]�W�[Y\�][\�[�[
-B�
-�������X�H���[�[^�Y���ۈ�K�ܚ]W�^
-���ۋ�[\�Ț][\Ȏ�][\��[Y\Ȏ�[Y\�K[��\�W�\��ZOQ�[�K[�[�L�JB��[�
-��b!���9k�9�$��[�][\�_H9�hK�[�[Y\˙�]
-	�[Y\���JJ_H9..�h��B
+def _parse_json(s: str):
+    """稳健提取首个 JSON 数组/对象：去围栏、剥前后夹带文字。"""
+    s = s.strip()
+    # 去 ```json ... ``` 或 ``` ... ``` 围栏
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", s, re.S)
+    if m:
+        s = m.group(1).strip()
+    # 截取第一个 [ 或 { 到最后一个 ] 或 }，剥离前后多余文字
+    cands = [p for p in (s.find("["), s.find("{")) if p != -1]
+    if cands:
+        s = s[min(cands):]
+    end = max(s.rfind("]"), s.rfind("}"))
+    if end != -1:
+        s = s[:end + 1]
+    return json.loads(s)
+
+
+def _analyze_batch(batch: list[dict], model: str):
+    """单批分析；失败重试一次，仍失败返回 None 交调用方按批回退。"""
+    payload = [{"i": it["_i"], "account": it["account_display"], "text": it["text"]}
+               for it in batch]
+    raw_body = json.dumps(payload, ensure_ascii=False)
+    last_err = None
+    for attempt in range(2):
+        try:
+            raw = _call(SYSTEM, raw_body, model)
+            arr = _parse_json(raw)
+            if not isinstance(arr, list):
+                raise ValueError(f"期望数组，得到 {type(arr).__name__}")
+            return arr
+        except Exception as e:
+            last_err = e
+            time.sleep(1.5 * (attempt + 1))
+    print(f"⚠️ 批次解析失败（{len(batch)} 条）: {last_err}")
+    return None
+
+
+def analyze_posts(items: list[dict], model: str, max_per: int) -> list[dict]:
+    # 按账号截断，控制 token
+    by_acct: dict[str, int] = {}
+    trimmed = []
+    for it in items:
+        k = it["account_handle"]
+        by_acct[k] = by_acct.get(k, 0) + 1
+        if by_acct[k] <= max_per:
+            trimmed.append(it)
+
+    if not trimmed:
+        return []
+
+    # 全局索引，便于按 i 对齐回填
+    for idx, it in enumerate(trimmed):
+        it["_i"] = idx
+        it.setdefault("summary", "")
+        it.setdefault("tickers", [])
+        it.setdefault("direction", "")
+        it.setdefault("noise", False)
+
+    by_index = {it["_i"]: it for it in trimmed}
+    fail_count = 0
+
+    for s in range(0, len(trimmed), BATCH_SIZE):
+        batch = trimmed[s:s + BATCH_SIZE]
+        arr = _analyze_batch(batch, model)
+        if arr is None:
+            for it in batch:          # 仅该批回退，不殃及其它批
+                it["summary"] = "(解析失败)"
+            fail_count += len(batch)
+            continue
+        if all(isinstance(a, dict) and "i" in a for a in arr):
+            for a in arr:             # 按 i 精确对齐
+                it = by_index.get(a.get("i"))
+                if it is None:
+                    continue
+                it["summary"] = a.get("summary", "") or ""
+                it["tickers"] = a.get("tickers", []) or []
+                it["direction"] = a.get("direction", "") or ""
+                it["noise"] = bool(a.get("noise", False))
+        else:
+            for it, a in zip(batch, arr):   # 退化为顺序对齐
+                if not isinstance(a, dict):
+                    continue
+                it["summary"] = a.get("summary", "") or ""
+                it["tickers"] = a.get("tickers", []) or []
+                it["direction"] = a.get("direction", "") or ""
+                it["noise"] = bool(a.get("noise", False))
+
+    if fail_count:
+        print(f"⚠️ 共 {fail_count}/{len(trimmed)} 条回退为 (解析失败)")
+    for it in trimmed:
+        it.pop("_i", None)
+    return trimmed
+
+
+def derive_themes(items: list[dict], model: str) -> dict:
+    digest = [{"account": it["account_display"],
+               "summary": it.get("summary", ""),
+               "tickers": it.get("tickers", [])}
+              for it in items
+              if not it.get("noise") and it.get("summary") not in ("", "(解析失败)")]
+    if not digest:
+        return {"themes": [], "hot_tickers": []}
+    try:
+        raw = _call(THEME_SYSTEM, json.dumps(digest, ensure_ascii=False), model)
+        return _parse_json(raw)
+    except Exception as e:
+        print(f"⚠️ 主题 JSON 解析失败: {e}")
+        return {"themes": [], "hot_tickers": []}
+
+
+if __name__ == "__main__":
+    import yaml
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text())
+    items = json.loads((ROOT / ".cache" / "raw_tweets.json").read_text())
+    model = cfg["summarize"]["model"]
+    items = analyze_posts(items, model, cfg["summarize"]["max_posts_per_account"])
+    themes = derive_themes(items, model)
+    (ROOT / ".cache" / "analyzed.json").write_text(
+        json.dumps({"items": items, "themes": themes}, ensure_ascii=False, indent=2))
+    print(f"分析完成: {len(items)} 条, {len(themes.get('themes', []))} 主题")
