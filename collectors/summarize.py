@@ -9,15 +9,20 @@ collectors/summarize.py
   ANTHROPIC_API_KEY
 """
 from __future__ import annotations
-import os, json, pathlib
+import os, re, json, time, pathlib
 import requests
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ENDPOINT = "https://api.anthropic.com/v1/messages"
 
+# 一次最多送多少条进模型，控制输出 token，避免被 max_tokens 截断
+BATCH_SIZE = 12
+MAX_TOKENS = 8000
+
 SYSTEM = """你是一位买方投研助理，为基金经理整理隔夜美股/港股/科技 KOL 推文。
 针对每条推文，输出严格的 JSON，字段:
+  "i":         回填输入里的 i（整数），用于对齐
   "summary":   一句话中文关键信息（提炼事实/观点，不要复述原文）
   "tickers":   提及标的数组，格式如 ["$NVDA","台积电"]，无则 []
   "direction": 一句话方向判断（看多/看空/中性 + 理由），无明确观点则填 "短评/无明确方向"
@@ -39,20 +44,54 @@ def _call(system: str, user_content: str, model: str) -> str:
         "content-type": "application/json",
     }, json={
         "model": model,
-        "max_tokens": 4000,
+        "max_tokens": MAX_TOKENS,
         "system": system,
         "messages": [{"role": "user", "content": user_content}],
     }, timeout=120)
     r.raise_for_status()
-    blocks = r.json().get("content", [])
+    body = r.json()
+    if body.get("stop_reason") == "max_tokens":
+        # 输出被截断——交给上层走重试逻辑，不要喂给 json.loads
+        raise ValueError("响应因 max_tokens 截断，JSON 不完整")
+    blocks = body.get("content", [])
     return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
 
 
 def _parse_json(s: str):
+    """稳健提取首个 JSON 数组/对象：去围栏、剥前后夹带文字。"""
     s = s.strip()
-    if s.startswith("```"):
-        s = s.split("```", 2)[1].lstrip("json").strip() if "```" in s else s
+    # 去 ```json ... ``` 或 ``` ... ``` 围栏
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", s, re.S)
+    if m:
+        s = m.group(1).strip()
+    # 截取第一个 [ 或 { 到最后一个 ] 或 }，剥离前后多余文字
+    cands = [p for p in (s.find("["), s.find("{")) if p != -1]
+    if cands:
+        s = s[min(cands):]
+    end = max(s.rfind("]"), s.rfind("}"))
+    if end != -1:
+        s = s[:end + 1]
     return json.loads(s)
+
+
+def _analyze_batch(batch: list[dict], model: str):
+    """单批分析；失败重试一次，仍失败返回 None 交调用方按批回退。"""
+    payload = [{"i": it["_i"], "account": it["account_display"], "text": it["text"]}
+               for it in batch]
+    raw_body = json.dumps(payload, ensure_ascii=False)
+    last_err = None
+    for attempt in range(2):
+        try:
+            raw = _call(SYSTEM, raw_body, model)
+            arr = _parse_json(raw)
+            if not isinstance(arr, list):
+                raise ValueError(f"期望数组，得到 {type(arr).__name__}")
+            return arr
+        except Exception as e:
+            last_err = e
+            time.sleep(1.5 * (attempt + 1))
+    print(f"⚠️ 批次解析失败（{len(batch)} 条）: {last_err}")
+    return None
 
 
 def analyze_posts(items: list[dict], model: str, max_per: int) -> list[dict]:
@@ -68,21 +107,47 @@ def analyze_posts(items: list[dict], model: str, max_per: int) -> list[dict]:
     if not trimmed:
         return []
 
-    payload = [{"i": idx, "account": it["account_display"], "text": it["text"]}
-               for idx, it in enumerate(trimmed)]
-    raw = _call(SYSTEM, json.dumps(payload, ensure_ascii=False), model)
-    try:
-        analyses = _parse_json(raw)
-    except Exception as e:
-        print(f"⚠️ 摘要 JSON 解析失败: {e}\n原始: {raw[:500]}")
-        analyses = [{"summary": "(解析失败)", "tickers": [], "direction": "", "noise": False}
-                    for _ in trimmed]
+    # 全局索引，便于按 i 对齐回填
+    for idx, it in enumerate(trimmed):
+        it["_i"] = idx
+        it.setdefault("summary", "")
+        it.setdefault("tickers", [])
+        it.setdefault("direction", "")
+        it.setdefault("noise", False)
 
-    for it, a in zip(trimmed, analyses):
-        it["summary"] = a.get("summary", "")
-        it["tickers"] = a.get("tickers", [])
-        it["direction"] = a.get("direction", "")
-        it["noise"] = a.get("noise", False)
+    by_index = {it["_i"]: it for it in trimmed}
+    fail_count = 0
+
+    for s in range(0, len(trimmed), BATCH_SIZE):
+        batch = trimmed[s:s + BATCH_SIZE]
+        arr = _analyze_batch(batch, model)
+        if arr is None:
+            for it in batch:          # 仅该批回退，不殃及其它批
+                it["summary"] = "(解析失败)"
+            fail_count += len(batch)
+            continue
+        if all(isinstance(a, dict) and "i" in a for a in arr):
+            for a in arr:             # 按 i 精确对齐
+                it = by_index.get(a.get("i"))
+                if it is None:
+                    continue
+                it["summary"] = a.get("summary", "") or ""
+                it["tickers"] = a.get("tickers", []) or []
+                it["direction"] = a.get("direction", "") or ""
+                it["noise"] = bool(a.get("noise", False))
+        else:
+            for it, a in zip(batch, arr):   # 退化为顺序对齐
+                if not isinstance(a, dict):
+                    continue
+                it["summary"] = a.get("summary", "") or ""
+                it["tickers"] = a.get("tickers", []) or []
+                it["direction"] = a.get("direction", "") or ""
+                it["noise"] = bool(a.get("noise", False))
+
+    if fail_count:
+        print(f"⚠️ 共 {fail_count}/{len(trimmed)} 条回退为 (解析失败)")
+    for it in trimmed:
+        it.pop("_i", None)
     return trimmed
 
 
@@ -90,11 +155,12 @@ def derive_themes(items: list[dict], model: str) -> dict:
     digest = [{"account": it["account_display"],
                "summary": it.get("summary", ""),
                "tickers": it.get("tickers", [])}
-              for it in items if not it.get("noise")]
+              for it in items
+              if not it.get("noise") and it.get("summary") not in ("", "(解析失败)")]
     if not digest:
         return {"themes": [], "hot_tickers": []}
-    raw = _call(THEME_SYSTEM, json.dumps(digest, ensure_ascii=False), model)
     try:
+        raw = _call(THEME_SYSTEM, json.dumps(digest, ensure_ascii=False), model)
         return _parse_json(raw)
     except Exception as e:
         print(f"⚠️ 主题 JSON 解析失败: {e}")
