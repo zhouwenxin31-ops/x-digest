@@ -85,6 +85,9 @@ def render(data: dict, tz_name="Asia/Shanghai") -> str:
     themes_html = "".join(f"<li>{esc(t)}</li>" for t in theme_list) \
         or "<li class='dim'>（无）</li>"
 
+    # ── 隔夜综述（约 500 字）──
+    overview_html = esc(themes.get("overview", "")) or "（无）"
+
     return f"""<!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -130,6 +133,8 @@ def render(data: dict, tz_name="Asia/Shanghai") -> str:
   .summary-block{{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:18px 20px;margin-top:34px}}
   .summary-block h2{{font-size:18px;margin:0 0 14px}}
+  .overview{{margin:0;color:var(--quote);font-size:14.5px;line-height:1.95;text-align:justify}}
+  .summary-top{{margin-top:18px}}
   .hots{{display:flex;flex-wrap:wrap;gap:8px}}
   .hot{{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);
     border:1px solid var(--line);border-radius:8px;padding:5px 10px}}
@@ -151,8 +156,11 @@ def render(data: dict, tz_name="Asia/Shanghai") -> str:
       共 <b>{total}</b> 条新帖 · 覆盖 <b>{len(groups)}</b> 个账号 · 报告生成 {now.strftime('%Y-%m-%d %H:%M')}
     </div>
   </header>
-  {''.join(sections) if sections else '<p class="dim" style="margin-top:40px">窗口内无新帖。</p>'}
 
+  <div class="summary-block summary-top">
+    <h2>📝 隔夜综述</h2>
+    <p class="overview">{overview_html}</p>
+  </div>
   <div class="summary-block">
     <h2>📊 隔夜高频提及标的</h2>
     <div class="hots">{hot_html}</div>
@@ -161,6 +169,8 @@ def render(data: dict, tz_name="Asia/Shanghai") -> str:
     <h2>🔑 隔夜核心主题</h2>
     <ol class="themes">{themes_html}</ol>
   </div>
+
+  {''.join(sections) if sections else '<p class="dim" style="margin-top:40px">窗口内无新帖。</p>'}
 
   <footer>
     自动生成 · 数据源 X API · 仅供内部研究参考，非投资建议<br>
