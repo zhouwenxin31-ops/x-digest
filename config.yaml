@@ -1,0 +1,35 @@
+# ── X 大V 监控名单 ──────────────────────────────────────────
+# handle 不带 @。display 仅用于报告展示。
+# 注：handle 是抓取的唯一依据，请确保准确（写错会拉不到人）。
+# 下面标 "??" 的是你给的名字里 handle 不明确的，第一次跑前请补全/核对。
+
+accounts:
+  - handle: jukan05            # Jukan @COMPUTEX
+    display: "Jukan @COMPUTEX"
+  - handle: aleabitoreddit     # Serenity
+    display: "Serenity"
+  - handle: mingchikuo         # 郭明錤 Ming-Chi Kuo
+    display: "郭明錤 Ming-Chi Kuo"
+  - handle: labubu_trader      # 3X Long Labubu
+    display: "3X Long Labubu"
+  - handle: quakes99           # John Quakes
+    display: "John Quakes"
+  - handle: TroyTeslike        # Troy Teslike
+    display: "Troy Teslike"
+  - handle: pcbanalysis        # kokycpcb
+    display: "kokycpcb @pcbanalysis"
+  # ↓ 这两个 handle 你没给全，请核对后填入，否则跳过
+  - handle: flowgod            # ?? 请核对真实 handle
+    display: "flowgod"
+  - handle: shortseller        # ?? 请核对真实 handle（"shortseller" 多半不是真 handle）
+    display: "shortseller"
+
+# ── 监控窗口 ────────────────────────────────────────────────
+window:
+  hours: 24                    # 回看小时数
+  timezone: "Asia/Shanghai"    # 报告显示用时区（北京时间）
+
+# ── 摘要 LLM ────────────────────────────────────────────────
+summarize:
+  model: "claude-opus-4-8"     # 走 Anthropic API
+  max_posts_per_account: 20    # 单账号最多取多少条进摘要，防爆 token
