@@ -31,5 +31,5 @@ window:
 
 # ── 摘要 LLM ────────────────────────────────────────────────
 summarize:
-  model: "claude-opus-4-8"     # 走 Anthropic API
+  model: "claude-haiku-4-5"     # 走 Anthropic API
   max_posts_per_account: 20    # 单账号最多取多少条进摘要，防爆 token
