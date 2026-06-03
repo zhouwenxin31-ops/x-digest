@@ -1,20 +1,17 @@
-# ── 新闻流追踪名单 ─────────────────────────────────────────
-# 按标的在 X 上搜过去 N 小时的相关讨论/新闻，AI 归类总结，输出 docs/news.html。
-# query 用 X recent-search 语法：美股用 cashtag；非美股用公司中英文名（cashtag 对港/台/A 股无效）。
-# sector 用于页面分组（对应你表里的"行业二级"）。
+# ── 新闻流追踪名单（Yahoo Finance 源）─────────────────────────
+# 每个标的用 yfinance 拉 Yahoo 新闻，过去 window_hours 小时内，逐家 ~100字 总结。
+# yahoo: Yahoo Finance 代码（美股原样；日股 .T；港股 .HK；台股 .TW）。
+# 注：Yahoo 对 A股基本无覆盖，已剔除亨通/万辰/寒武纪。
+# sector 用于页面分组（对应"行业二级"）。
 
 window_hours: 24
-max_results: 10          # 每个标的最多取多少条（X search 最小 10，控制 API 消耗）
 
 watchlist:
-  - {name: 闪迪,         ticker: SNDK,    sector: 硬件设备, query: "($SNDK OR SanDisk) -is:retweet"}
-  - {name: 铠侠,         ticker: 285A,    sector: 硬件设备, query: "(Kioxia OR 铠侠) -is:retweet"}
-  - {name: 英特尔,       ticker: INTC,    sector: 半导体,   query: "$INTC -is:retweet"}
-  - {name: AXT,          ticker: AXTI,    sector: 半导体,   query: "($AXTI OR \"AXT Inc\") -is:retweet"}
-  - {name: 高通,         ticker: QCOM,    sector: 半导体,   query: "$QCOM -is:retweet"}
-  - {name: 美光科技,     ticker: MU,      sector: 半导体,   query: "$MU -is:retweet"}
-  - {name: 长飞光纤光缆, ticker: 6869.HK, sector: 硬件设备, query: "(YOFC OR \"Yangtze Optical\" OR 长飞光纤) -is:retweet"}
-  - {name: 欣兴电子,     ticker: 3037.TW, sector: 硬件设备, query: "(Unimicron OR 欣興 OR 欣兴电子) -is:retweet"}
-  - {name: 亨通光电,     ticker: "600487", sector: 硬件设备, query: "(Hengtong OR 亨通光电) -is:retweet"}
-  - {name: 万辰集团,     ticker: "300972", sector: 食品饮料, query: "(万辰集团 OR 鸣鸣很忙) -is:retweet"}
-  - {name: 寒武纪,       ticker: "688256", sector: 半导体,   query: "(Cambricon OR 寒武纪) -is:retweet"}
+  - {name: 英特尔,       ticker: INTC,    sector: 半导体,   yahoo: INTC}
+  - {name: AXT,          ticker: AXTI,    sector: 半导体,   yahoo: AXTI}
+  - {name: 高通,         ticker: QCOM,    sector: 半导体,   yahoo: QCOM}
+  - {name: 美光科技,     ticker: MU,      sector: 半导体,   yahoo: MU}
+  - {name: 闪迪,         ticker: SNDK,    sector: 硬件设备, yahoo: SNDK}
+  - {name: 铠侠,         ticker: 285A,    sector: 硬件设备, yahoo: 285A.T}
+  - {name: 长飞光纤光缆, ticker: 6869.HK, sector: 硬件设备, yahoo: 6869.HK}
+  - {name: 欣兴电子,     ticker: 3037.TW, sector: 硬件设备, yahoo: 3037.TW}
