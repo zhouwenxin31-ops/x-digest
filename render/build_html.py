@@ -135,6 +135,10 @@ def render(data: dict, tz_name="Asia/Shanghai") -> str:
   .summary-block h2{{font-size:18px;margin:0 0 14px}}
   .overview{{margin:0;color:var(--quote);font-size:14.5px;line-height:1.95;text-align:justify}}
   .summary-top{{margin-top:18px}}
+  .nav{{display:flex;gap:10px;margin:18px 0 6px}}
+  .nav a{{padding:7px 14px;border:1px solid var(--line);border-radius:20px;
+    color:var(--dim);text-decoration:none;font-size:13px}}
+  .nav a.on{{background:var(--accent);color:#04201b;border-color:var(--accent);font-weight:600}}
   .hots{{display:flex;flex-wrap:wrap;gap:8px}}
   .hot{{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);
     border:1px solid var(--line);border-radius:8px;padding:5px 10px}}
@@ -156,6 +160,8 @@ def render(data: dict, tz_name="Asia/Shanghai") -> str:
       共 <b>{total}</b> 条新帖 · 覆盖 <b>{len(groups)}</b> 个账号 · 报告生成 {now.strftime('%Y-%m-%d %H:%M')}
     </div>
   </header>
+
+  <nav class="nav"><a class="on" href="index.html">🌙 大V动态</a><a href="news.html">📰 新闻流追踪</a></nav>
 
   <div class="summary-block summary-top">
     <h2>📝 隔夜综述</h2>
