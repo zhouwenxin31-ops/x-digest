@@ -1,75 +1,65 @@
 """
 collectors/news_collector.py
 ────────────────────────────
-按 watchlist.yaml 用 X API v2 recent-search 搜每个标的过去 N 小时的讨论/新闻。
-复用 x_collector 的鉴权 (_headers) 与 429 退避 (_get)。
+按 watchlist.yaml 用 yfinance 拉每个标的过去 N 小时的 Yahoo Finance 新闻。
+免费、无需 API key。Yahoo 对美股/日股覆盖好，港/台覆盖弱、A股基本没有。
+yfinance 延迟导入：未安装时不影响大V日报。
 
-注意：recent-search 端点需 X API Basic 档及以上（与拉用户时间线同档）。
-若 token 档位不足会返回 403——已做单标的容错，不会拖垮整条流水线。
-
-输出: list[{name,ticker,sector,query, tweets:[{text,author,url,created_local,likes,...}]}]
+输出: list[{name,ticker,sector,yahoo, articles:[{title,summary,publisher,url,published_local,published_utc}]}]
 """
 from __future__ import annotations
-import time, datetime as dt, pathlib
+import datetime as dt, pathlib
 import yaml
 from zoneinfo import ZoneInfo
-from . import x_collector as xc   # 复用 API / _get / _headers
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SEARCH_URL = f"{xc.API}/tweets/search/recent"
 
 
-def _search(query: str, start_iso: str, max_results: int = 10) -> list[dict]:
-    """调用 recent-search，返回标准化推文列表。"""
-    params = {
-        "query": query,
-        "start_time": start_iso,
-        "max_results": max(10, min(max_results, 100)),
-        "tweet.fields": "created_at,public_metrics,lang",
-        "expansions": "author_id",
-        "user.fields": "username,name",
+def _parse(it: dict) -> dict:
+    c = it.get("content", it) or {}
+    prov = c.get("provider") or {}
+    url = (c.get("canonicalUrl") or {}).get("url") \
+        or (c.get("clickThroughUrl") or {}).get("url") or ""
+    return {
+        "title": c.get("title", ""),
+        "summary": c.get("summary") or c.get("description") or "",
+        "publisher": prov.get("displayName", "") if isinstance(prov, dict) else "",
+        "url": url,
+        "pubDate": c.get("pubDate") or "",
     }
-    data = xc._get(SEARCH_URL, params)
-    users = {u["id"]: u for u in data.get("includes", {}).get("users", [])}
-    out = []
-    for t in data.get("data", []):
-        u = users.get(t.get("author_id"), {})
-        m = t.get("public_metrics", {})
-        out.append({
-            "text": t.get("text", ""),
-            "lang": t.get("lang", ""),
-            "author": u.get("username", ""),
-            "url": f"https://x.com/{u.get('username','i')}/status/{t['id']}",
-            "created_utc": t["created_at"],
-            "likes": m.get("like_count", 0),
-            "retweets": m.get("retweet_count", 0),
-            "replies": m.get("reply_count", 0),
-        })
-    return out
 
 
 def collect_news(hours: int = 24, tz_name: str = "Asia/Shanghai") -> list[dict]:
+    import yfinance as yf  # 延迟导入
     cfg = yaml.safe_load((ROOT / "watchlist.yaml").read_text())
     hours = cfg.get("window_hours", hours)
-    maxr = cfg.get("max_results", 10)
-    start = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
-    start_iso = start.strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"新闻流窗口起点 (UTC): {start_iso}")
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+    tz = ZoneInfo(tz_name)
+    print(f"Yahoo 新闻窗口: 过去 {hours}h（截止 {cutoff:%Y-%m-%d %H:%M} UTC）")
 
     groups = []
     for w in cfg["watchlist"]:
+        arts = []
         try:
-            tw = _search(w["query"], start_iso, maxr)
+            raw = yf.Ticker(w["yahoo"]).news or []
+            for it in raw:
+                a = _parse(it)
+                if not a["title"] or not a["pubDate"]:
+                    continue
+                try:
+                    pub = dt.datetime.fromisoformat(a["pubDate"].replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                if pub < cutoff:
+                    continue
+                a["published_local"] = pub.astimezone(tz).strftime("%m/%d %H:%M")
+                a["published_utc"] = pub.isoformat()
+                arts.append(a)
+            arts.sort(key=lambda x: x["published_utc"], reverse=True)
         except Exception as e:
-            print(f"  ⚠️ 搜索 {w['name']}（{w['ticker']}）失败: {e}")
-            tw = []
-        for t in tw:
-            c = dt.datetime.fromisoformat(t["created_utc"].replace("Z", "+00:00"))
-            t["created_local"] = c.astimezone(ZoneInfo(tz_name)).strftime("%m/%d %H:%M")
-        tw.sort(key=lambda x: (x["likes"] + x["retweets"]), reverse=True)
-        groups.append({**w, "tweets": tw})
-        print(f"{w['name']}（{w['ticker']}）: {len(tw)} 条")
-        time.sleep(1)
+            print(f"  ⚠️ 拉取 {w['name']}（{w['yahoo']}）失败: {e}")
+        groups.append({**w, "articles": arts})
+        print(f"{w['name']}（{w['yahoo']}）: 24h 内 {len(arts)} 条")
     return groups
 
 
