@@ -5,7 +5,12 @@ on:
     # 01:15 UTC = 09:15 北京时间。
     # 注：GitHub cron 走 UTC，且高峰常延迟 5-15 分钟，提早排程以尽量卡在 09:30 前出报告。
     - cron: "15 1 * * *"
-  workflow_dispatch: {}        # 支持手动触发（Actions 页面点 Run）
+  workflow_dispatch:            # 支持手动触发（Actions 页面点 Run）
+    inputs:
+      run_news:
+        description: "同时刷新新闻流（默认仅每天定时跑，省 API）"
+        type: boolean
+        default: false
 
 permissions:
   contents: write              # 提交归档 + 缓存
@@ -33,6 +38,7 @@ jobs:
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RUN_NEWS: ${{ github.event.inputs.run_news }}
         run: python run.py
 
       - name: Commit archive + id cache
