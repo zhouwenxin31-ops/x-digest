@@ -1,9 +1,9 @@
 """
 render/build_news_html.py
 ─────────────────────────
-把 news_analyzed.json 渲染成「隔夜新闻流追踪」单页，写到 docs/news.html。
-按 watchlist 的"行业二级"分组，每个标的展示 AI 摘要 + 情绪 + 代表推文。
-与 build_html.py 共用同一套深色视觉。
+把 news_analyzed.json 渲染成「隔夜新闻流追踪」单页 docs/news.html。
+数据源 Yahoo Finance（yfinance）。按行业二级分组，每个标的只显示一段 ~100字 AI 总结
++ 情绪标签，不展示新闻原文。与 build_html.py 共用同一套深色视觉。
 """
 from __future__ import annotations
 import json, pathlib, datetime as dt, html
@@ -27,52 +27,35 @@ def _senti_class(s: str) -> str:
 
 
 def _company_card(g: dict) -> str:
-    a = g.get("analysis", {}) or {}
-    tweets = g.get("tweets", []) or []
-    senti = a.get("sentiment", "")
-    has = bool(tweets)
-    # 代表推文（取前 3 条，已按热度排序）
-    tw_html = ""
-    for t in tweets[:3]:
-        tw_html += f"""
-        <div class="ntw">
-          <blockquote>{esc(t.get('text',''))}</blockquote>
-          <div class="ntw-meta">
-            <span>@{esc(t.get('author',''))}</span>
-            <span>🕗 {esc(t.get('created_local',''))}</span>
-            <span>♥ {t.get('likes',0)} · ↻ {t.get('retweets',0)}</span>
-            <a href="{esc(t.get('url','#'))}" target="_blank" rel="noopener">原帖 ↗</a>
-          </div>
-        </div>"""
-    if has:
-        body = f"""
-        <div class="headline">{esc(a.get('headline','—'))}</div>
-        <div class="nsum">{esc(a.get('summary',''))}</div>
-        {tw_html}"""
-        senti_badge = f'<span class="senti {_senti_class(senti)}">{esc(senti or "中性")}</span>'
+    a = g.get("analysis") or {}
+    n = len(g.get("articles") or [])
+    summary = a.get("summary", "")
+    if n and summary:
+        senti = a.get("sentiment", "中性")
+        badge = f'<span class="senti {_senti_class(senti)}">{esc(senti)}</span>'
+        body = f'<div class="nsum">{esc(summary)}</div>' \
+               f'<div class="src">来源 Yahoo Finance · 基于 {n} 条 24h 新闻</div>'
     else:
-        body = '<div class="nsum dim">窗口内无相关讨论 / 无搜索结果。</div>'
-        senti_badge = '<span class="senti neu dim">无数据</span>'
+        badge = '<span class="senti neu dim">无新闻</span>'
+        body = '<div class="nsum dim">过去 24h 内 Yahoo 无相关新闻。</div>'
     return f"""
-      <article class="ncard{'' if has else ' empty'}">
+      <article class="ncard{'' if (n and summary) else ' empty'}">
         <div class="ncard-head">
           <span class="cname">{esc(g.get('name',''))}</span>
           <span class="cticker">{esc(g.get('ticker',''))}</span>
-          {senti_badge}
-          <span class="ccount">{len(tweets)} 条</span>
-        </div>{body}
+          {badge}
+        </div>
+        {body}
       </article>"""
 
 
 def render(data: dict, tz_name: str = "Asia/Shanghai") -> str:
     groups = data.get("groups", [])
-    overview = esc(data.get("overview", "")) or "（无）"
     now = dt.datetime.now(ZoneInfo(tz_name))
     win_start = now - dt.timedelta(hours=24)
     total = len(groups)
-    active = sum(1 for g in groups if g.get("tweets"))
+    active = sum(1 for g in groups if (g.get("articles") and (g.get("analysis") or {}).get("summary")))
 
-    # 按行业二级分组，保持 watchlist 原顺序
     order, by_sec = [], {}
     for g in groups:
         sec = g.get("sector", "其他")
@@ -114,11 +97,7 @@ def render(data: dict, tz_name: str = "Asia/Shanghai") -> str:
   .nav a{{padding:7px 14px;border:1px solid var(--line);border-radius:20px;
     color:var(--dim);text-decoration:none;font-size:13px}}
   .nav a.on{{background:var(--accent);color:#04201b;border-color:var(--accent);font-weight:600}}
-  .summary-block{{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    padding:18px 20px;margin-top:18px}}
-  .summary-block h2{{font-size:18px;margin:0 0 14px}}
-  .overview{{margin:0;color:var(--quote);font-size:14.5px;line-height:1.95;text-align:justify}}
-  section.sec{{margin-top:34px}}
+  section.sec{{margin-top:30px}}
   section.sec>h2{{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     font-size:19px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px dashed var(--line)}}
   .anum{{display:inline-flex;padding:3px 12px;border-radius:8px;
@@ -126,7 +105,7 @@ def render(data: dict, tz_name: str = "Asia/Shanghai") -> str:
   .count{{margin-left:auto;font-size:12px;color:var(--dim);font-weight:400}}
   .ncard{{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:16px 18px;margin-bottom:12px}}
-  .ncard.empty{{opacity:.55}}
+  .ncard.empty{{opacity:.5}}
   .ncard-head{{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}}
   .cname{{font-weight:600;font-size:16px}}
   .cticker{{background:var(--panel2);border:1px solid var(--line);color:var(--accent2);
@@ -135,15 +114,8 @@ def render(data: dict, tz_name: str = "Asia/Shanghai") -> str:
   .senti.long{{color:#04201b;background:var(--long)}}
   .senti.short{{color:#2a0b0b;background:var(--short)}}
   .senti.neu{{color:var(--ink);background:var(--panel2)}}
-  .ccount{{margin-left:auto;font-size:12px;color:var(--dim)}}
-  .headline{{font-size:14.5px;font-weight:600;color:var(--accent);margin:2px 0 8px}}
-  .nsum{{color:var(--quote);font-size:14px;margin-bottom:10px}}
-  .ntw{{border-top:1px dashed var(--line);padding-top:10px;margin-top:10px}}
-  .ntw blockquote{{margin:0 0 6px;padding:8px 12px;background:#0e1320;
-    border-left:3px solid var(--line);border-radius:0 8px 8px 0;color:var(--quote);
-    font-size:13px;white-space:pre-wrap;word-break:break-word}}
-  .ntw-meta{{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--dim)}}
-  .ntw-meta a{{color:var(--accent);text-decoration:none;margin-left:auto}}
+  .nsum{{color:var(--quote);font-size:14.5px;line-height:1.9;text-align:justify}}
+  .src{{margin-top:8px;font-size:11.5px;color:var(--dim)}}
   .dim{{color:var(--dim)}}
   footer{{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);
     color:var(--dim);font-size:12px;text-align:center;line-height:1.8}}
@@ -153,29 +125,24 @@ def render(data: dict, tz_name: str = "Asia/Shanghai") -> str:
   <header class="top">
     <h1>📰 隔夜新闻流追踪</h1>
     <div class="sub">
-      监控时段：<b>{win_start.strftime('%Y-%m-%d %H:%M')} — {now.strftime('%m-%d %H:%M')}</b>（北京时间）· 数据源 X 搜索<br>
-      覆盖 <b>{total}</b> 个标的 · 其中 <b>{active}</b> 个有动态 · 报告生成 {now.strftime('%Y-%m-%d %H:%M')}
+      监控时段：<b>{win_start.strftime('%Y-%m-%d %H:%M')} — {now.strftime('%m-%d %H:%M')}</b>（北京时间）· 数据源 Yahoo Finance<br>
+      覆盖 <b>{total}</b> 个标的 · 其中 <b>{active}</b> 个有 24h 新闻 · 报告生成 {now.strftime('%Y-%m-%d %H:%M')}
     </div>
     <nav class="nav"><a href="index.html">🌙 大V动态</a><a class="on" href="news.html">📰 新闻流追踪</a></nav>
   </header>
 
-  <div class="summary-block">
-    <h2>📝 隔夜新闻综述</h2>
-    <p class="overview">{overview}</p>
-  </div>
-
-  {sections if sections else '<p class="dim" style="margin-top:40px">名单内暂无可展示数据。</p>'}
+  {sections if sections else '<p class="dim" style="margin-top:40px">名单内暂无数据。</p>'}
 
   <footer>
-    自动生成 · 数据源 X API 搜索 · 仅供内部研究参考，非投资建议<br>
-    内容为公开推文的机器摘要，可能有误或遗漏，决策前请核对原始信息
+    自动生成 · 数据源 Yahoo Finance · 仅供内部研究参考，非投资建议<br>
+    内容为公开新闻的机器摘要，可能有误或遗漏，决策前请核对原始信息
   </footer>
 </div></body></html>"""
 
 
 def main():
     path = ROOT / ".cache" / "news_analyzed.json"
-    data = json.loads(path.read_text()) if path.exists() else {"overview": "", "groups": []}
+    data = json.loads(path.read_text()) if path.exists() else {"groups": []}
     (DOCS / "news.html").write_text(render(data), encoding="utf-8")
     print("已生成 docs/news.html")
 
