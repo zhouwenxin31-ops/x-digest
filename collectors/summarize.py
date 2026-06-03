@@ -168,6 +168,42 @@ def derive_themes(items: list[dict], model: str) -> dict:
         return {"overview": "", "themes": [], "hot_tickers": []}
 
 
+NEWS_SYSTEM = """你是买方投研分析师。下面是若干公司过去24小时在 X 上的相关推文（新闻/讨论/观点）。
+针对每家公司输出 JSON 数组，每个元素:
+  "ticker":   与输入一致
+  "headline": 一句话提炼该公司隔夜最值得注意的信息；无实质信息填 "无显著新闻"
+  "summary":  2-4 句中文：发生了什么、市场/KOL 怎么看、对基本面或股价的潜在含义；无实质信息则简述（如"主要为常规讨论，无重要催化"）
+  "sentiment": 看多/看空/中性 三选一（基于推文整体倾向）
+顺序与输入一致。只输出 JSON 数组，不要 markdown 围栏、不要多余文字。"""
+
+NEWS_OVERVIEW_SYSTEM = """你是买方投研主管。基于以下各公司隔夜新闻摘要，写一段约300字中文综述：
+串联隔夜值得关注的公司/板块新闻主线与潜在交易含义，叙事连贯成段，不分点、不罗列。只输出这段文字。"""
+
+
+def summarize_news(groups: list[dict], model: str) -> dict:
+    """对每个有推文的标的做摘要，并产出一段总览。返回 {overview, items:[{ticker,...}]}。"""
+    payload = [{"ticker": g["ticker"], "name": g["name"],
+                "tweets": [t["text"] for t in g["tweets"][:12]]}
+               for g in groups if g.get("tweets")]
+    if not payload:
+        return {"overview": "", "items": []}
+    try:
+        items = _parse_json(_call(NEWS_SYSTEM, json.dumps(payload, ensure_ascii=False), model))
+        if not isinstance(items, list):
+            items = []
+    except Exception as e:
+        print(f"⚠️ 新闻摘要解析失败: {e}")
+        items = []
+    overview = ""
+    if items:
+        try:
+            overview = _call(NEWS_OVERVIEW_SYSTEM,
+                             json.dumps(items, ensure_ascii=False), model).strip()
+        except Exception as e:
+            print(f"⚠️ 新闻综述失败: {e}")
+    return {"overview": overview, "items": items}
+
+
 if __name__ == "__main__":
     import yaml
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text())
